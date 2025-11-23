@@ -26,7 +26,7 @@ export default function FilterPanel({
     onFiltersChange({})
   }
 
-  const hasActiveFilters = filters.category_id || filters.tag_ids?.length || filters.is_free !== undefined || filters.min_quality || filters.min_printability || filters.min_design
+  const hasActiveFilters = filters.category_id || filters.tag_ids?.length || filters.is_free !== undefined || filters.min_quality || filters.min_printability || filters.min_design || filters.pla_compatible !== undefined
 
   return (
     <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200 shadow-md p-4 sticky top-24">
@@ -121,6 +121,21 @@ export default function FilterPanel({
               className="w-3.5 h-3.5 text-indigo-600 rounded focus:ring-1 focus:ring-indigo-500"
             />
             <span className="text-xs text-gray-700">Alleen gratis</span>
+          </label>
+        </div>
+
+        {/* PLA/Bambu Filter */}
+        <div>
+          <label className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+            <input
+              type="checkbox"
+              checked={filters.pla_compatible !== false}
+              onChange={(e) =>
+                updateFilter('pla_compatible', e.target.checked ? true : false)
+              }
+              className="w-3.5 h-3.5 text-indigo-600 rounded focus:ring-1 focus:ring-indigo-500"
+            />
+            <span className="text-xs text-gray-700">PLA / Bambu P1S/P2S</span>
           </label>
         </div>
 

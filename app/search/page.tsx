@@ -20,6 +20,7 @@ function SearchPageContent() {
     page: 1,
     limit: 20,
     sort_by: searchParams.get('sort_by') as SearchFilters['sort_by'] || 'popularity', // Default to popularity for "verken modelen"
+    pla_compatible: true, // Default to true (PLA/Bambu filter enabled)
   })
   const [categories, setCategories] = useState<{ id: string; name: string; slug: string }[]>([])
   const [tags, setTags] = useState<{ id: string; name: string }[]>([])
@@ -129,18 +130,27 @@ function SearchPageContent() {
         }
       }
       
-      // Always add PLA to the query to filter for PLA-compatible models
-      if (searchQuery) {
-        // Add PLA to the query if not already present
-        const queryLower = searchQuery.toLowerCase()
-        if (!queryLower.includes('pla')) {
-          searchQuery = `${searchQuery} PLA`
+      // Add PLA to the query if PLA filter is enabled
+      if (filters.pla_compatible !== false) {
+        if (searchQuery) {
+          // Add PLA to the query if not already present
+          const queryLower = searchQuery.toLowerCase()
+          if (!queryLower.includes('pla')) {
+            searchQuery = `${searchQuery} PLA`
+          }
+          externalParams.set('q', searchQuery)
+          console.log('[Search] External search query (with PLA filter):', searchQuery)
+        } else {
+          // Use PLA as default search term
+          externalParams.set('q', 'PLA')
         }
-        externalParams.set('q', searchQuery)
-        console.log('[Search] External search query (with PLA filter):', searchQuery)
       } else {
-        // Use PLA as default search term
-        externalParams.set('q', 'PLA')
+        // PLA filter disabled, use original query
+        if (searchQuery) {
+          externalParams.set('q', searchQuery)
+        } else {
+          externalParams.set('q', '*')
+        }
       }
       // Fetch multiple pages from external API for better sorting
       const externalPages = Math.ceil(resultsPerSource / 20) // Thingiverse returns 20 per page
@@ -211,49 +221,51 @@ function SearchPageContent() {
           })
         }
         
-        // Filter for PLA-compatible models suitable for Bambu P1S/P2S
-        filteredModels = filteredModels.filter((model) => {
-          const nameLower = (model.name || '').toLowerCase()
-          const descLower = (model.description || '').toLowerCase()
-          const tagsLower = (model.tags || []).map(t => (t.name || '').toLowerCase()).join(' ')
-          const allText = `${nameLower} ${descLower} ${tagsLower}`.toLowerCase()
-          
-          // Check for PLA compatibility
-          const hasPLA = allText.includes('pla') || 
-                        allText.includes('polylactic acid') ||
-                        tagsLower.includes('pla')
-          
-          // Check for Bambu P1S/P2S compatibility or general FDM compatibility
-          // Most PLA models work on Bambu printers, so we check for:
-          // - Explicit Bambu mentions
-          // - P1S/P2S mentions
-          // - General FDM/3D printer compatibility (most models are)
-          // - No explicit exclusions (like "resin only", "SLA only", etc.)
-          const hasBambuCompatibility = 
-            allText.includes('bambu') ||
-            allText.includes('p1s') ||
-            allText.includes('p2s') ||
-            allText.includes('x1') ||
-            allText.includes('fdm') ||
-            allText.includes('fused deposition') ||
-            !allText.includes('resin only') &&
-            !allText.includes('sla only') &&
-            !allText.includes('dlp only') &&
-            !allText.includes('sls only')
-          
-          // If model explicitly mentions incompatible materials, exclude it
-          const hasIncompatibleMaterial = 
-            (allText.includes('abs') && !allText.includes('pla')) ||
-            (allText.includes('petg') && !allText.includes('pla')) ||
-            (allText.includes('tpu') && !allText.includes('pla')) ||
-            allText.includes('resin') ||
-            allText.includes('sla') ||
-            allText.includes('dlp') ||
-            allText.includes('sls')
-          
-          // Include if: has PLA AND (has Bambu compatibility OR no incompatible materials)
-          return hasPLA && (hasBambuCompatibility || !hasIncompatibleMaterial)
-        })
+        // Filter for PLA-compatible models suitable for Bambu P1S/P2S (only if filter is enabled)
+        if (filters.pla_compatible !== false) {
+          filteredModels = filteredModels.filter((model) => {
+            const nameLower = (model.name || '').toLowerCase()
+            const descLower = (model.description || '').toLowerCase()
+            const tagsLower = (model.tags || []).map(t => (t.name || '').toLowerCase()).join(' ')
+            const allText = `${nameLower} ${descLower} ${tagsLower}`.toLowerCase()
+            
+            // Check for PLA compatibility
+            const hasPLA = allText.includes('pla') || 
+                          allText.includes('polylactic acid') ||
+                          tagsLower.includes('pla')
+            
+            // Check for Bambu P1S/P2S compatibility or general FDM compatibility
+            // Most PLA models work on Bambu printers, so we check for:
+            // - Explicit Bambu mentions
+            // - P1S/P2S mentions
+            // - General FDM/3D printer compatibility (most models are)
+            // - No explicit exclusions (like "resin only", "SLA only", etc.)
+            const hasBambuCompatibility = 
+              allText.includes('bambu') ||
+              allText.includes('p1s') ||
+              allText.includes('p2s') ||
+              allText.includes('x1') ||
+              allText.includes('fdm') ||
+              allText.includes('fused deposition') ||
+              (!allText.includes('resin only') &&
+               !allText.includes('sla only') &&
+               !allText.includes('dlp only') &&
+               !allText.includes('sls only'))
+            
+            // If model explicitly mentions incompatible materials, exclude it
+            const hasIncompatibleMaterial = 
+              (allText.includes('abs') && !allText.includes('pla')) ||
+              (allText.includes('petg') && !allText.includes('pla')) ||
+              (allText.includes('tpu') && !allText.includes('pla')) ||
+              (allText.includes('resin') && !allText.includes('pla')) ||
+              (allText.includes('sla') && !allText.includes('pla')) ||
+              (allText.includes('dlp') && !allText.includes('pla')) ||
+              (allText.includes('sls') && !allText.includes('pla'))
+            
+            // Include if: has PLA AND (has Bambu compatibility OR no incompatible materials)
+            return hasPLA && (hasBambuCompatibility || !hasIncompatibleMaterial)
+          })
+        }
         
         // Debug: check download_count
         if (filteredModels.length > 0) {

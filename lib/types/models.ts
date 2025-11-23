@@ -99,5 +99,6 @@ export interface SearchFilters {
   sort_by?: 'relevance' | 'popularity' | 'newest' | 'oldest'
   page?: number
   limit?: number
+  pla_compatible?: boolean // Filter for PLA/Bambu P1S/P2S compatible models
 }
 
