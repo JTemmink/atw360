@@ -1,4 +1,4 @@
-interface ThingiverseThing {
+export interface ThingiverseThing {
   id: number
   name: string
   description: string

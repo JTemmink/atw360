@@ -3,6 +3,9 @@ import { getModelProvider } from '@/lib/api/models-provider'
 
 export async function GET(request: NextRequest) {
   const startTime = Date.now()
+  const searchParams = request.nextUrl.searchParams
+  const debugMode = searchParams.get('debug') === 'true'
+  
   const debug: any = {
     timestamp: new Date().toISOString(),
     query: null,
@@ -15,10 +18,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const searchParams = request.nextUrl.searchParams
     const query = searchParams.get('q')
     const provider = searchParams.get('provider') || 'thingiverse'
-    const debugMode = searchParams.get('debug') === 'true'
 
     debug.query = query
     debug.provider = provider
@@ -80,14 +81,16 @@ export async function GET(request: NextRequest) {
     console.error('[External API] Search error:', error)
     console.error('[External API] Debug info:', debug)
 
-    return NextResponse.json(
-      {
-        error: 'Failed to search external models',
-        message: error.message,
-        debug: debugMode ? debug : undefined,
-      },
-      { status: 500 }
-    )
+    const response: any = {
+      error: 'Failed to search external models',
+      message: error.message,
+    }
+
+    if (debugMode) {
+      response.debug = debug
+    }
+
+    return NextResponse.json(response, { status: 500 })
   }
 }
 

@@ -5,7 +5,14 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import CommentForm from './CommentForm'
 
-interface CommentWithReplies extends Comment {
+interface CommentWithReplies {
+  id: string
+  user_id: string
+  model_id: string
+  parent_id: string | null
+  content: string
+  created_at: string
+  updated_at: string
   replies?: CommentWithReplies[]
   user?: { email: string }
 }

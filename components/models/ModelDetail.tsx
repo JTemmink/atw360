@@ -6,10 +6,8 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import ReviewForm from '@/components/reviews/ReviewForm'
 import ReviewList from '@/components/reviews/ReviewList'
-import { Review } from '@/lib/types/models'
 import CommentForm from '@/components/comments/CommentForm'
 import CommentList from '@/components/comments/CommentList'
-import { Comment } from '@/lib/types/models'
 
 interface ModelDetailProps {
   model: Model & {

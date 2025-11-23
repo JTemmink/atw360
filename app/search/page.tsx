@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import SearchBar from '@/components/search/SearchBar'
 import FilterPanel from '@/components/search/FilterPanel'
@@ -8,7 +8,7 @@ import SearchResults from '@/components/search/SearchResults'
 import ExternalSearchToggle from '@/components/search/ExternalSearchToggle'
 import { Model, SearchFilters } from '@/lib/types/models'
 
-export default function SearchPage() {
+function SearchPageContent() {
   const searchParams = useSearchParams()
   const [models, setModels] = useState<Model[]>([])
   const [loading, setLoading] = useState(true)
@@ -229,6 +229,22 @@ export default function SearchPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function SearchPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 py-8">
+        <div className="container mx-auto px-4">
+          <div className="text-center py-12">
+            <p className="text-gray-600">Laden...</p>
+          </div>
+        </div>
+      </div>
+    }>
+      <SearchPageContent />
+    </Suspense>
   )
 }
 
