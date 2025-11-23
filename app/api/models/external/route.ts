@@ -18,18 +18,16 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const query = searchParams.get('q')
+    let query = searchParams.get('q')
     const provider = searchParams.get('provider') || 'thingiverse'
+
+    // If no query but filters are set, use a generic search term
+    if (!query || query === '*') {
+      query = '3d' // Generic search term to get results when only filters are used
+    }
 
     debug.query = query
     debug.provider = provider
-
-    if (!query) {
-      return NextResponse.json(
-        { error: 'Query parameter "q" is required', debug },
-        { status: 400 }
-      )
-    }
 
     console.log(`[External API] Search request:`, { query, provider, debugMode })
 

@@ -13,7 +13,8 @@ export async function searchModels(filters: SearchFilters = {}) {
       )
     `)
 
-  // Text search
+  // Text search (only if query is provided)
+  // If no query but filters are set, show all models matching the filters
   if (filters.query) {
     query = query.or(
       `name.ilike.%${filters.query}%,description.ilike.%${filters.query}%`

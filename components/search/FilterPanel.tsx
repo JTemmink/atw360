@@ -26,37 +26,43 @@ export default function FilterPanel({
     onFiltersChange({})
   }
 
+  const hasActiveFilters = filters.category_id || filters.tag_ids?.length || filters.is_free !== undefined || filters.min_quality || filters.min_printability || filters.min_design
+
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4">
+    <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200 shadow-md p-4 sticky top-24">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold">Filters</h3>
-        <div className="flex gap-2">
+        <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+          <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+          </svg>
+          Filters
+          {hasActiveFilters && (
+            <span className="ml-1 px-1.5 py-0.5 bg-indigo-100 text-indigo-700 text-xs font-bold rounded-full">
+              {[filters.category_id, filters.tag_ids?.length, filters.is_free, filters.min_quality, filters.min_printability, filters.min_design].filter(Boolean).length}
+            </span>
+          )}
+        </h3>
+        {hasActiveFilters && (
           <button
             onClick={clearFilters}
-            className="text-sm text-blue-600 hover:text-blue-700"
+            className="text-xs text-indigo-600 hover:text-indigo-700 font-medium transition-colors"
           >
             Wissen
           </button>
-          <button
-            onClick={() => setIsOpen(!isOpen)}
-            className="md:hidden text-gray-600"
-          >
-            {isOpen ? '▲' : '▼'}
-          </button>
-        </div>
+        )}
       </div>
 
-      <div className={`space-y-4 ${isOpen ? 'block' : 'hidden md:block'}`}>
+      <div className={`space-y-3 ${isOpen ? 'block' : 'hidden md:block'}`}>
         {/* Category Filter */}
         {categories.length > 0 && (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs font-medium text-gray-600 mb-1.5">
               Categorie
             </label>
             <select
               value={filters.category_id || ''}
               onChange={(e) => updateFilter('category_id', e.target.value || undefined)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
             >
               <option value="">Alle categorieën</option>
               {categories.map((cat) => (
@@ -71,14 +77,14 @@ export default function FilterPanel({
         {/* Tags Filter */}
         {tags.length > 0 && (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs font-medium text-gray-600 mb-1.5">
               Tags
             </label>
-            <div className="space-y-2 max-h-40 overflow-y-auto">
+            <div className="space-y-1.5 max-h-32 overflow-y-auto">
               {tags.map((tag) => {
                 const isSelected = filters.tag_ids?.includes(tag.id)
                 return (
-                  <label key={tag.id} className="flex items-center gap-2 cursor-pointer">
+                  <label key={tag.id} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 p-1 rounded">
                     <input
                       type="checkbox"
                       checked={isSelected || false}
@@ -93,9 +99,9 @@ export default function FilterPanel({
                           )
                         }
                       }}
-                      className="w-4 h-4"
+                      className="w-3.5 h-3.5 text-indigo-600 rounded focus:ring-1 focus:ring-indigo-500"
                     />
-                    <span className="text-sm">{tag.name}</span>
+                    <span className="text-xs text-gray-700">{tag.name}</span>
                   </label>
                 )
               })}
@@ -105,30 +111,27 @@ export default function FilterPanel({
 
         {/* Price Filter */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Prijs
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer">
+          <label className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
             <input
               type="checkbox"
               checked={filters.is_free === true}
               onChange={(e) =>
                 updateFilter('is_free', e.target.checked ? true : undefined)
               }
-              className="w-4 h-4"
+              className="w-3.5 h-3.5 text-indigo-600 rounded focus:ring-1 focus:ring-indigo-500"
             />
-            <span className="text-sm">Alleen gratis</span>
+            <span className="text-xs text-gray-700">Alleen gratis</span>
           </label>
         </div>
 
         {/* Score Filters */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-xs font-medium text-gray-600 mb-1.5">
             Minimale scores
           </label>
-          <div className="space-y-2">
+          <div className="grid grid-cols-3 gap-1.5">
             <div>
-              <label className="text-xs text-gray-600">Kwaliteit</label>
+              <label className="text-xs text-gray-500 mb-0.5 block">Kwaliteit</label>
               <input
                 type="number"
                 min="1"
@@ -140,12 +143,12 @@ export default function FilterPanel({
                     e.target.value ? parseInt(e.target.value) : undefined
                   )
                 }
-                className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm"
+                className="w-full rounded-lg border border-gray-200 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
                 placeholder="Min"
               />
             </div>
             <div>
-              <label className="text-xs text-gray-600">Printbaarheid</label>
+              <label className="text-xs text-gray-500 mb-0.5 block">Print</label>
               <input
                 type="number"
                 min="1"
@@ -157,12 +160,12 @@ export default function FilterPanel({
                     e.target.value ? parseInt(e.target.value) : undefined
                   )
                 }
-                className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm"
+                className="w-full rounded-lg border border-gray-200 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
                 placeholder="Min"
               />
             </div>
             <div>
-              <label className="text-xs text-gray-600">Design</label>
+              <label className="text-xs text-gray-500 mb-0.5 block">Design</label>
               <input
                 type="number"
                 min="1"
@@ -174,30 +177,11 @@ export default function FilterPanel({
                     e.target.value ? parseInt(e.target.value) : undefined
                   )
                 }
-                className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm"
+                className="w-full rounded-lg border border-gray-200 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
                 placeholder="Min"
               />
             </div>
           </div>
-        </div>
-
-        {/* Sort */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Sorteren op
-          </label>
-          <select
-            value={filters.sort_by || 'relevance'}
-            onChange={(e) =>
-              updateFilter('sort_by', e.target.value as SearchFilters['sort_by'])
-            }
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-          >
-            <option value="relevance">Relevantie</option>
-            <option value="popularity">Populariteit</option>
-            <option value="newest">Nieuwste</option>
-            <option value="oldest">Oudste</option>
-          </select>
         </div>
       </div>
     </div>

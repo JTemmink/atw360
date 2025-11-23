@@ -228,21 +228,64 @@ export class ThingiverseAPI {
 
     console.log(`[Thingiverse API] Fetching thing ${thingId} from: ${url.replace(this.token || '', '[TOKEN_HIDDEN]')}`)
 
-    const response = await fetch(url, { headers })
+    try {
+      const response = await fetch(url, { headers })
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => response.statusText)
-      console.error(`[Thingiverse API] Error fetching thing ${thingId}:`, {
-        status: response.status,
-        statusText: response.statusText,
-        body: errorText.substring(0, 200),
-      })
-      throw new Error(`Thingiverse API error: ${response.status} ${response.statusText}`)
+      if (!response.ok) {
+        let errorText = ''
+        let errorData: any = null
+        
+        try {
+          errorText = await response.text()
+          if (errorText) {
+            try {
+              errorData = JSON.parse(errorText)
+            } catch {
+              // Not JSON, use as text
+            }
+          }
+        } catch (textError) {
+          errorText = response.statusText || 'Unknown error'
+        }
+
+        const errorInfo: any = {
+          status: response.status,
+          statusText: response.statusText,
+          url: url.replace(this.token || '', '[TOKEN_HIDDEN]'),
+        }
+
+        if (errorData) {
+          errorInfo.errorData = errorData
+        } else if (errorText) {
+          errorInfo.body = errorText.substring(0, 500)
+        }
+
+        console.error(`[Thingiverse API] Error fetching thing ${thingId}:`, errorInfo)
+        
+        // Handle specific error cases
+        if (response.status === 404) {
+          throw new Error(`Thing ${thingId} not found on Thingiverse`)
+        } else if (response.status === 401 || response.status === 403) {
+          throw new Error(`Thingiverse API authentication failed. Check your API token.`)
+        } else if (response.status === 429) {
+          throw new Error(`Thingiverse API rate limit exceeded. Please try again later.`)
+        } else {
+          throw new Error(`Thingiverse API error: ${response.status} ${response.statusText}`)
+        }
+      }
+
+      const data = await response.json()
+      console.log(`[Thingiverse API] Thing ${thingId} fetched successfully`)
+      return data
+    } catch (error: any) {
+      // Re-throw if it's already our custom error
+      if (error.message && error.message.includes('Thingiverse API')) {
+        throw error
+      }
+      // Otherwise wrap it
+      console.error(`[Thingiverse API] Unexpected error fetching thing ${thingId}:`, error)
+      throw new Error(`Failed to fetch thing ${thingId}: ${error.message || 'Unknown error'}`)
     }
-
-    const data = await response.json()
-    console.log(`[Thingiverse API] Thing ${thingId} fetched successfully`)
-    return data
   }
 
   async getThingFiles(thingId: number): Promise<any[]> {
@@ -257,18 +300,47 @@ export class ThingiverseAPI {
       'User-Agent': '3D-Model-Search-Platform/1.0',
     }
 
-    const response = await fetch(url, { headers })
+    try {
+      const response = await fetch(url, { headers })
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => response.statusText)
-      console.error(`[Thingiverse API] Error fetching files for ${thingId}:`, {
-        status: response.status,
-        statusText: response.statusText,
-      })
-      throw new Error(`Thingiverse API error: ${response.status} ${response.statusText}`)
+      if (!response.ok) {
+        let errorText = ''
+        try {
+          errorText = await response.text()
+        } catch {
+          errorText = response.statusText || 'Unknown error'
+        }
+
+        const errorInfo: any = {
+          status: response.status,
+          statusText: response.statusText,
+          url: url.replace(this.token || '', '[TOKEN_HIDDEN]'),
+        }
+
+        if (errorText) {
+          errorInfo.body = errorText.substring(0, 500)
+        }
+
+        console.error(`[Thingiverse API] Error fetching files for ${thingId}:`, errorInfo)
+        
+        if (response.status === 404) {
+          // Files endpoint might not exist for some things, return empty array
+          console.warn(`[Thingiverse API] Files not found for thing ${thingId}, returning empty array`)
+          return []
+        }
+        
+        throw new Error(`Thingiverse API error: ${response.status} ${response.statusText}`)
+      }
+
+      return await response.json()
+    } catch (error: any) {
+      if (error.message && error.message.includes('Thingiverse API')) {
+        throw error
+      }
+      console.error(`[Thingiverse API] Unexpected error fetching files for ${thingId}:`, error)
+      // Return empty array on error instead of throwing, so model detail page still works
+      return []
     }
-
-    return await response.json()
   }
 }
 

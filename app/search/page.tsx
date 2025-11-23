@@ -16,13 +16,27 @@ function SearchPageContent() {
   const [totalResults, setTotalResults] = useState(0)
   const [filters, setFilters] = useState<SearchFilters>({
     query: searchParams.get('q') || undefined,
+    category_id: searchParams.get('category_id') || undefined,
     page: 1,
     limit: 20,
+    sort_by: searchParams.get('sort_by') as SearchFilters['sort_by'] || 'popularity', // Default to popularity for "verken modelen"
   })
-  const [categories, setCategories] = useState<{ id: string; name: string }[]>([])
+  const [categories, setCategories] = useState<{ id: string; name: string; slug: string }[]>([])
   const [tags, setTags] = useState<{ id: string; name: string }[]>([])
   const [aiSuggestions, setAiSuggestions] = useState<any>(null)
   const [externalSearchEnabled, setExternalSearchEnabled] = useState(true)
+  
+  // Mapping van Nederlandse categorie namen naar Engelse zoektermen voor Thingiverse
+  const categoryToEnglishMap: Record<string, string> = {
+    'Decoratie': 'decoration decorative',
+    'Speelgoed': 'toy toys',
+    'Gereedschap': 'tool tools hardware',
+    'Kunst': 'art sculpture',
+    'Functioneel': 'functional utility',
+    'Miniaturen': 'miniature mini',
+    'Organizers': 'organizer storage',
+    'Sieraden': 'jewelry jewelry',
+  }
 
   const handleAISearch = (query: string, results: any) => {
     setModels(results.models || [])
@@ -34,7 +48,15 @@ function SearchPageContent() {
     // Load categories and tags
     fetch('/api/categories')
       .then((res) => res.json())
-      .then((data) => setCategories(data.categories || []))
+      .then((data) => {
+        // Ensure categories have slug property
+        const cats = (data.categories || []).map((cat: any) => ({
+          id: cat.id,
+          name: cat.name,
+          slug: cat.slug || cat.name.toLowerCase(),
+        }))
+        setCategories(cats)
+      })
       .catch(console.error)
 
     fetch('/api/tags')
@@ -44,6 +66,11 @@ function SearchPageContent() {
   }, [])
 
   useEffect(() => {
+    // Don't search if categories haven't loaded yet and we need them
+    if (filters.category_id && categories.length === 0) {
+      return
+    }
+    
     setLoading(true)
     const page = filters.page || 1
     const pageSize = filters.limit || 20
@@ -67,9 +94,49 @@ function SearchPageContent() {
     ]
 
     // Add external search if enabled
-    if (externalSearchEnabled && filters.query) {
+    // Show results if: query exists, filters are set, or no query/filters (show popular models)
+    const hasFilters = filters.category_id || filters.tag_ids?.length || filters.is_free !== undefined
+    const shouldSearchExternal = externalSearchEnabled && (filters.query || hasFilters || (!filters.query && !hasFilters))
+    
+    if (shouldSearchExternal) {
       const externalParams = new URLSearchParams()
-      externalParams.set('q', filters.query)
+      let searchQuery = filters.query || ''
+      
+      // If category is selected, add English category terms to the query
+      if (filters.category_id && !filters.query) {
+        const selectedCategory = categories.find(cat => cat.id === filters.category_id)
+        console.log('[Search] Category filter:', {
+          category_id: filters.category_id,
+          selectedCategory,
+          categoriesLength: categories.length,
+          categoryMap: categoryToEnglishMap,
+        })
+        if (selectedCategory) {
+          const englishTerms = categoryToEnglishMap[selectedCategory.name] || selectedCategory.name.toLowerCase()
+          searchQuery = englishTerms
+          console.log('[Search] Using category search terms:', englishTerms)
+        } else {
+          console.warn('[Search] Category not found:', filters.category_id, 'Available categories:', categories.map(c => c.id))
+        }
+      } else if (filters.category_id && filters.query) {
+        // Combine query with category terms
+        const selectedCategory = categories.find(cat => cat.id === filters.category_id)
+        if (selectedCategory) {
+          const englishTerms = categoryToEnglishMap[selectedCategory.name] || selectedCategory.name.toLowerCase()
+          searchQuery = `${filters.query} ${englishTerms}`
+        } else {
+          searchQuery = filters.query
+        }
+      }
+      
+      if (searchQuery) {
+        externalParams.set('q', searchQuery)
+        console.log('[Search] External search query:', searchQuery)
+      } else {
+        // Use a generic search term if no query - show popular models
+        // The API will handle this and use '3d' as default
+        externalParams.set('q', '*')
+      }
       // Fetch multiple pages from external API for better sorting
       const externalPages = Math.ceil(resultsPerSource / 20) // Thingiverse returns 20 per page
       const externalPromises = []
@@ -77,8 +144,9 @@ function SearchPageContent() {
         const extParams = new URLSearchParams(externalParams)
         extParams.set('page', p.toString())
         extParams.set('pageSize', '20')
-        if (filters.sort_by) extParams.set('sort_by', filters.sort_by)
-        if (filters.category_id) extParams.set('categories', filters.category_id)
+        // Default to 'popular' sort if no query (for "verken modelen")
+        extParams.set('sort_by', filters.sort_by || (filters.query ? 'relevant' : 'popular'))
+        // Don't pass category_id to Thingiverse - we've added it to the query instead
         if (filters.tag_ids?.length) extParams.set('tags', filters.tag_ids.join(','))
         externalPromises.push(
           fetch(`/api/models/external?${extParams.toString()}`).then((res) => res.json())
@@ -126,29 +194,62 @@ function SearchPageContent() {
             index === self.findIndex((m) => m.id === model.id)
         )
         
+        // Apply is_free filter client-side (for combined results)
+        let filteredModels = uniqueModels
+        if (filters.is_free !== undefined) {
+          filteredModels = uniqueModels.filter((model) => {
+            // External models (Thingiverse) are always free
+            if (model.id.startsWith('thingiverse_')) {
+              return filters.is_free === true
+            }
+            return model.is_free === filters.is_free
+          })
+        }
+        
         // Debug: check download_count
-        if (uniqueModels.length > 0) {
+        if (filteredModels.length > 0) {
           console.log('[Search] Sample model download_count:', {
-            id: uniqueModels[0].id,
-            name: uniqueModels[0].name,
-            download_count: uniqueModels[0].download_count,
-            hasDownloadCount: 'download_count' in uniqueModels[0],
+            id: filteredModels[0].id,
+            name: filteredModels[0].name,
+            download_count: filteredModels[0].download_count,
+            is_free: filteredModels[0].is_free,
+            hasDownloadCount: 'download_count' in filteredModels[0],
           })
         }
         
         // Apply sorting to combined results
-        const sortedModels = applySorting(uniqueModels, filters.sort_by || 'relevance')
+        // If no query and no filters, default to popularity (most popular of the week)
+        const hasAnyFilters = filters.category_id || filters.tag_ids?.length || filters.is_free !== undefined
+        const defaultSort = (!filters.query && !hasAnyFilters) ? 'popularity' : (filters.sort_by || 'relevance')
+        const sortedModels = applySorting(filteredModels, defaultSort)
+        
+        // If no query and no filters, filter to models from the last week for "most popular of the week"
+        let finalModels = sortedModels
+        if (!filters.query && !hasAnyFilters) {
+          const oneWeekAgo = new Date()
+          oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
+          finalModels = sortedModels.filter((model) => {
+            const modelDate = new Date(model.created_at)
+            return modelDate >= oneWeekAgo
+          })
+          // If we don't have enough from last week, show all popular models
+          if (finalModels.length < pageSize) {
+            finalModels = sortedModels
+          }
+        } else {
+          finalModels = sortedModels
+        }
         
         // Apply client-side pagination after sorting
         const startIndex = (page - 1) * pageSize
         const endIndex = startIndex + pageSize
-        const paginatedModels = sortedModels.slice(startIndex, endIndex)
+        const paginatedModels = finalModels.slice(startIndex, endIndex)
         
         // Estimate total: if we got full results, assume there are more
-        const hasMoreResults = sortedModels.length >= resultsPerSource
+        const hasMoreResults = finalModels.length >= resultsPerSource
         const estimatedTotal = hasMoreResults 
           ? Math.max(maxTotal, page * pageSize + pageSize * 2) // Estimate more pages
-          : sortedModels.length
+          : finalModels.length
         
         setModels(paginatedModels)
         setTotalResults(Math.max(maxTotal, estimatedTotal))
@@ -159,7 +260,7 @@ function SearchPageContent() {
         console.error('Search error:', error)
         setLoading(false)
       })
-  }, [filters, externalSearchEnabled])
+  }, [filters, externalSearchEnabled, categories])
 
   const applySorting = (models: Model[], sortBy: string): Model[] => {
     const sorted = [...models]
@@ -190,7 +291,7 @@ function SearchPageContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50/30 py-8">
       <div className="container mx-auto px-4">
         <div className="mb-8">
           <SearchBar initialQuery={filters.query} onAISearch={handleAISearch} />
@@ -200,14 +301,14 @@ function SearchPageContent() {
           onChange={setExternalSearchEnabled}
         />
         {aiSuggestions && (
-          <div className="mb-4 p-4 bg-blue-50 rounded-lg">
-            <p className="text-sm text-blue-800">
-              <strong>AI Suggesties:</strong> {aiSuggestions.keywords?.join(', ')}
+          <div className="mb-6 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-200 shadow-sm">
+            <p className="text-sm text-indigo-800">
+              <strong className="font-semibold">AI Suggesties:</strong> {aiSuggestions.keywords?.join(', ')}
             </p>
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           <div className="lg:col-span-1">
             <FilterPanel
               filters={filters}
@@ -216,7 +317,7 @@ function SearchPageContent() {
               tags={tags}
             />
           </div>
-          <div className="lg:col-span-3">
+          <div className="lg:col-span-4">
             <SearchResults 
               models={models} 
               loading={loading}
@@ -224,6 +325,8 @@ function SearchPageContent() {
               totalResults={totalResults}
               pageSize={filters.limit || 20}
               onPageChange={handlePageChange}
+              sortBy={filters.sort_by || 'relevance'}
+              onSortChange={(sort) => setFilters({ ...filters, sort_by: sort as SearchFilters['sort_by'] })}
             />
           </div>
         </div>

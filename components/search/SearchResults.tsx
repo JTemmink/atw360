@@ -11,6 +11,8 @@ interface SearchResultsProps {
   totalResults?: number
   pageSize?: number
   onPageChange?: (page: number) => void
+  sortBy?: string
+  onSortChange?: (sort: string) => void
 }
 
 export default function SearchResults({ 
@@ -19,7 +21,9 @@ export default function SearchResults({
   currentPage = 1,
   totalResults = 0,
   pageSize = 20,
-  onPageChange
+  onPageChange,
+  sortBy = 'relevance',
+  onSortChange
 }: SearchResultsProps) {
   if (loading) {
     return (
@@ -63,11 +67,11 @@ export default function SearchResults({
     }
 
     return (
-      <div className="flex items-center justify-center gap-2 mt-8">
+      <div className="flex items-center justify-center gap-2 mt-12">
         <button
           onClick={() => onPageChange?.(currentPage - 1)}
           disabled={currentPage === 1}
-          className="px-4 py-2 rounded-lg border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+          className="px-5 py-2.5 rounded-xl border-2 border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 hover:border-gray-300 font-medium transition-all disabled:hover:bg-transparent"
         >
           Vorige
         </button>
@@ -76,11 +80,11 @@ export default function SearchResults({
           <>
             <button
               onClick={() => onPageChange?.(1)}
-              className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50"
+              className="px-4 py-2 rounded-xl border-2 border-gray-200 hover:bg-gray-50 hover:border-gray-300 font-medium transition-all"
             >
               1
             </button>
-            {startPage > 2 && <span className="px-2">...</span>}
+            {startPage > 2 && <span className="px-2 text-gray-400">...</span>}
           </>
         )}
 
@@ -88,10 +92,10 @@ export default function SearchResults({
           <button
             key={page}
             onClick={() => onPageChange?.(page)}
-            className={`px-4 py-2 rounded-lg border ${
+            className={`px-4 py-2.5 rounded-xl border-2 font-semibold transition-all ${
               page === currentPage
-                ? 'bg-blue-600 text-white border-blue-600'
-                : 'border-gray-300 hover:bg-gray-50'
+                ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white border-transparent shadow-lg scale-110'
+                : 'border-gray-200 hover:bg-gray-50 hover:border-gray-300'
             }`}
           >
             {page}
@@ -100,10 +104,10 @@ export default function SearchResults({
 
         {endPage < totalPages && (
           <>
-            {endPage < totalPages - 1 && <span className="px-2">...</span>}
+            {endPage < totalPages - 1 && <span className="px-2 text-gray-400">...</span>}
             <button
               onClick={() => onPageChange?.(totalPages)}
-              className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50"
+              className="px-4 py-2 rounded-xl border-2 border-gray-200 hover:bg-gray-50 hover:border-gray-300 font-medium transition-all"
             >
               {totalPages}
             </button>
@@ -113,7 +117,7 @@ export default function SearchResults({
         <button
           onClick={() => onPageChange?.(currentPage + 1)}
           disabled={currentPage >= totalPages}
-          className="px-4 py-2 rounded-lg border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+          className="px-5 py-2.5 rounded-xl border-2 border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 hover:border-gray-300 font-medium transition-all disabled:hover:bg-transparent"
         >
           Volgende
         </button>
@@ -123,11 +127,26 @@ export default function SearchResults({
 
   return (
     <>
-      <div className="mb-4 text-sm text-gray-600">
+      <div className="mb-6 flex items-center justify-between flex-wrap gap-3">
         {totalResults > 0 && (
-          <span>
-            {((currentPage - 1) * pageSize + 1)}-{Math.min(currentPage * pageSize, totalResults)} van {totalResults} resultaten
-          </span>
+          <p className="text-sm font-medium text-gray-700">
+            Toont <span className="font-bold text-indigo-600">{((currentPage - 1) * pageSize + 1)}-{Math.min(currentPage * pageSize, totalResults)}</span> van <span className="font-bold text-indigo-600">{totalResults.toLocaleString()}</span> resultaten
+          </p>
+        )}
+        {onSortChange && (
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-medium text-gray-600">Sorteren op:</label>
+            <select
+              value={sortBy}
+              onChange={(e) => onSortChange(e.target.value)}
+              className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition-all bg-white"
+            >
+              <option value="relevance">Relevantie</option>
+              <option value="popularity">Populariteit</option>
+              <option value="newest">Nieuwste</option>
+              <option value="oldest">Oudste</option>
+            </select>
+          </div>
         )}
       </div>
       
@@ -135,43 +154,56 @@ export default function SearchResults({
         {models.map((model) => (
           <div
             key={model.id}
-            className="bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow relative"
+            className="group bg-white rounded-2xl border border-gray-200 overflow-hidden hover:shadow-2xl transition-all duration-300 relative hover:-translate-y-1"
           >
             <Link href={`/models/${model.id}`} className="block">
-              {model.thumbnail_url ? (
-                <img
-                  src={model.thumbnail_url}
-                  alt={model.name}
-                  className="w-full h-48 object-cover"
-                />
-              ) : (
-                <div className="w-full h-48 bg-gray-200 flex items-center justify-center">
-                  <span className="text-gray-400">Geen afbeelding</span>
-                </div>
-              )}
-              <div className="p-4">
-                <h3 className="font-semibold text-lg mb-2 line-clamp-2">
+              <div className="relative overflow-hidden bg-gray-100">
+                {model.thumbnail_url ? (
+                  <img
+                    src={model.thumbnail_url}
+                    alt={model.name}
+                    className="w-full h-56 object-cover group-hover:scale-110 transition-transform duration-500"
+                  />
+                ) : (
+                  <div className="w-full h-56 bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
+                    <svg className="w-16 h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              </div>
+              <div className="p-5">
+                <h3 className="font-bold text-lg mb-2 line-clamp-2 text-gray-900 group-hover:text-indigo-600 transition-colors">
                   {model.name}
                 </h3>
                 {model.description && (
-                  <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+                  <p className="text-sm text-gray-600 mb-4 line-clamp-2 leading-relaxed">
                     {model.description}
                   </p>
                 )}
-                <div className="flex items-center justify-between text-sm text-gray-500">
-                  <span>
-                    {(model.download_count ?? 0).toLocaleString()} downloads
-                  </span>
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    <span className="font-medium">{(model.download_count ?? 0).toLocaleString()}</span>
+                  </div>
                   {model.average_quality && (
-                    <span>⭐ {model.average_quality.toFixed(1)}</span>
+                    <div className="flex items-center gap-1 text-amber-500">
+                      <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20">
+                        <path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z" />
+                      </svg>
+                      <span className="font-semibold">{model.average_quality.toFixed(1)}</span>
+                    </div>
                   )}
                 </div>
               </div>
             </Link>
-            <div className="absolute top-2 right-2 z-10">
+            <div className="absolute top-3 right-3 z-10">
               <FavoriteButton 
                 modelId={model.id} 
-                className="text-2xl bg-white/80 backdrop-blur-sm rounded-full p-1 shadow-md hover:bg-white transition-colors"
+                className="bg-white/90 backdrop-blur-md rounded-full p-2 shadow-lg hover:bg-white hover:scale-110 transition-all"
                 isExternal={model.id.startsWith('thingiverse_')}
                 externalUrl={(model as any).external_url}
               />

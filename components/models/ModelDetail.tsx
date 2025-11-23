@@ -197,6 +197,20 @@ export default function ModelDetail({ model }: ModelDetailProps) {
             </div>
           )}
 
+          {/* Find Printer Button */}
+          <div className="p-6 border-b">
+            <h2 className="text-xl font-semibold mb-4">Laat dit model printen</h2>
+            <a
+              href={`mailto:otte@example.com?subject=3D Print Aanvraag&body=Ik wil graag dit model laten printen: ${encodeURIComponent(model.name)}`}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:shadow-lg font-semibold transition-all"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              Laat het printen door Otte!
+            </a>
+          </div>
+
           {/* External Model Link */}
           {(model as any).is_external && (model as any).external_url && (
             <div className="p-6 border-b">
