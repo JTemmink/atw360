@@ -129,13 +129,18 @@ function SearchPageContent() {
         }
       }
       
+      // Always add PLA to the query to filter for PLA-compatible models
       if (searchQuery) {
+        // Add PLA to the query if not already present
+        const queryLower = searchQuery.toLowerCase()
+        if (!queryLower.includes('pla')) {
+          searchQuery = `${searchQuery} PLA`
+        }
         externalParams.set('q', searchQuery)
-        console.log('[Search] External search query:', searchQuery)
+        console.log('[Search] External search query (with PLA filter):', searchQuery)
       } else {
-        // Use a generic search term if no query - show popular models
-        // The API will handle this and use '3d' as default
-        externalParams.set('q', '*')
+        // Use PLA as default search term
+        externalParams.set('q', 'PLA')
       }
       // Fetch multiple pages from external API for better sorting
       const externalPages = Math.ceil(resultsPerSource / 20) // Thingiverse returns 20 per page
@@ -205,6 +210,50 @@ function SearchPageContent() {
             return model.is_free === filters.is_free
           })
         }
+        
+        // Filter for PLA-compatible models suitable for Bambu P1S/P2S
+        filteredModels = filteredModels.filter((model) => {
+          const nameLower = (model.name || '').toLowerCase()
+          const descLower = (model.description || '').toLowerCase()
+          const tagsLower = (model.tags || []).map(t => (t.name || '').toLowerCase()).join(' ')
+          const allText = `${nameLower} ${descLower} ${tagsLower}`.toLowerCase()
+          
+          // Check for PLA compatibility
+          const hasPLA = allText.includes('pla') || 
+                        allText.includes('polylactic acid') ||
+                        tagsLower.includes('pla')
+          
+          // Check for Bambu P1S/P2S compatibility or general FDM compatibility
+          // Most PLA models work on Bambu printers, so we check for:
+          // - Explicit Bambu mentions
+          // - P1S/P2S mentions
+          // - General FDM/3D printer compatibility (most models are)
+          // - No explicit exclusions (like "resin only", "SLA only", etc.)
+          const hasBambuCompatibility = 
+            allText.includes('bambu') ||
+            allText.includes('p1s') ||
+            allText.includes('p2s') ||
+            allText.includes('x1') ||
+            allText.includes('fdm') ||
+            allText.includes('fused deposition') ||
+            !allText.includes('resin only') &&
+            !allText.includes('sla only') &&
+            !allText.includes('dlp only') &&
+            !allText.includes('sls only')
+          
+          // If model explicitly mentions incompatible materials, exclude it
+          const hasIncompatibleMaterial = 
+            (allText.includes('abs') && !allText.includes('pla')) ||
+            (allText.includes('petg') && !allText.includes('pla')) ||
+            (allText.includes('tpu') && !allText.includes('pla')) ||
+            allText.includes('resin') ||
+            allText.includes('sla') ||
+            allText.includes('dlp') ||
+            allText.includes('sls')
+          
+          // Include if: has PLA AND (has Bambu compatibility OR no incompatible materials)
+          return hasPLA && (hasBambuCompatibility || !hasIncompatibleMaterial)
+        })
         
         // Debug: check download_count
         if (filteredModels.length > 0) {

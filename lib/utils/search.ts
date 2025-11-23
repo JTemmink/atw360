@@ -15,9 +15,18 @@ export async function searchModels(filters: SearchFilters = {}) {
 
   // Text search (only if query is provided)
   // If no query but filters are set, show all models matching the filters
-  if (filters.query) {
+  // Always add PLA to search to filter for PLA-compatible models
+  let searchQuery = filters.query || ''
+  if (searchQuery && !searchQuery.toLowerCase().includes('pla')) {
+    searchQuery = `${searchQuery} PLA`
+  } else if (!searchQuery) {
+    // If no query, search for PLA-compatible models
+    searchQuery = 'PLA'
+  }
+  
+  if (searchQuery) {
     query = query.or(
-      `name.ilike.%${filters.query}%,description.ilike.%${filters.query}%`
+      `name.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`
     )
   }
 
@@ -118,6 +127,47 @@ export async function searchModels(filters: SearchFilters = {}) {
     })
   )
 
-  return modelsWithScores.filter((m) => m !== null) as Model[]
+  // Filter for PLA-compatible models suitable for Bambu P1S/P2S
+  const filteredModels = modelsWithScores.filter((m) => {
+    if (!m) return false
+    
+    const nameLower = (m.name || '').toLowerCase()
+    const descLower = (m.description || '').toLowerCase()
+    const tagsLower = (m.tags || []).map((t: any) => (t.name || '').toLowerCase()).join(' ')
+    const allText = `${nameLower} ${descLower} ${tagsLower}`.toLowerCase()
+    
+    // Check for PLA compatibility
+    const hasPLA = allText.includes('pla') || 
+                  allText.includes('polylactic acid') ||
+                  tagsLower.includes('pla')
+    
+    // Check for Bambu P1S/P2S compatibility or general FDM compatibility
+    const hasBambuCompatibility = 
+      allText.includes('bambu') ||
+      allText.includes('p1s') ||
+      allText.includes('p2s') ||
+      allText.includes('x1') ||
+      allText.includes('fdm') ||
+      allText.includes('fused deposition') ||
+      (!allText.includes('resin only') &&
+       !allText.includes('sla only') &&
+       !allText.includes('dlp only') &&
+       !allText.includes('sls only'))
+    
+    // If model explicitly mentions incompatible materials, exclude it
+    const hasIncompatibleMaterial = 
+      (allText.includes('abs') && !allText.includes('pla')) ||
+      (allText.includes('petg') && !allText.includes('pla')) ||
+      (allText.includes('tpu') && !allText.includes('pla')) ||
+      (allText.includes('resin') && !allText.includes('pla')) ||
+      (allText.includes('sla') && !allText.includes('pla')) ||
+      (allText.includes('dlp') && !allText.includes('pla')) ||
+      (allText.includes('sls') && !allText.includes('pla'))
+    
+    // Include if: has PLA AND (has Bambu compatibility OR no incompatible materials)
+    return hasPLA && (hasBambuCompatibility || !hasIncompatibleMaterial)
+  }) as Model[]
+  
+  return filteredModels
 }
 
