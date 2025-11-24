@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
 interface SearchBarProps {
@@ -14,6 +14,11 @@ export default function SearchBar({ initialQuery = '', onAISearch, showExternalS
   const [isAISearch, setIsAISearch] = useState(false)
   const [loading, setLoading] = useState(false)
   const router = useRouter()
+
+  // Sync query with initialQuery prop changes
+  useEffect(() => {
+    setQuery(initialQuery)
+  }, [initialQuery])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

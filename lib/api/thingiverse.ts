@@ -227,9 +227,11 @@ export class ThingiverseAPI {
     }
 
     console.log(`[Thingiverse API] Fetching thing ${thingId} from: ${url.replace(this.token || '', '[TOKEN_HIDDEN]')}`)
+    console.log(`[Thingiverse API] Token present: ${!!this.token}, length: ${this.token?.length || 0}`)
 
     try {
       const response = await fetch(url, { headers })
+      console.log(`[Thingiverse API] Response status: ${response.status} ${response.statusText}`)
 
       if (!response.ok) {
         let errorText = ''
@@ -237,14 +239,18 @@ export class ThingiverseAPI {
         
         try {
           errorText = await response.text()
+          console.log(`[Thingiverse API] Error response text (first 500 chars):`, errorText.substring(0, 500))
           if (errorText) {
             try {
               errorData = JSON.parse(errorText)
+              console.log(`[Thingiverse API] Error response parsed as JSON:`, errorData)
             } catch {
               // Not JSON, use as text
+              console.log(`[Thingiverse API] Error response is not JSON`)
             }
           }
-        } catch (textError) {
+        } catch (textError: any) {
+          console.error(`[Thingiverse API] Error reading response text:`, textError)
           errorText = response.statusText || 'Unknown error'
         }
 
@@ -270,21 +276,34 @@ export class ThingiverseAPI {
         } else if (response.status === 429) {
           throw new Error(`Thingiverse API rate limit exceeded. Please try again later.`)
         } else {
-          throw new Error(`Thingiverse API error: ${response.status} ${response.statusText}`)
+          throw new Error(`Thingiverse API error: ${response.status} ${response.statusText} - ${errorText.substring(0, 200)}`)
         }
       }
 
-      const data = await response.json()
-      console.log(`[Thingiverse API] Thing ${thingId} fetched successfully`)
+      let data: any
+      try {
+        data = await response.json()
+        console.log(`[Thingiverse API] Thing ${thingId} fetched successfully, has id: ${!!data.id}, has name: ${!!data.name}`)
+      } catch (jsonError: any) {
+        console.error(`[Thingiverse API] Error parsing JSON response:`, jsonError)
+        throw new Error(`Failed to parse Thingiverse API response: ${jsonError.message || 'Invalid JSON'}`)
+      }
+      
       return data
     } catch (error: any) {
       // Re-throw if it's already our custom error
-      if (error.message && error.message.includes('Thingiverse API')) {
+      if (error?.message && error.message.includes('Thingiverse API')) {
         throw error
       }
       // Otherwise wrap it
-      console.error(`[Thingiverse API] Unexpected error fetching thing ${thingId}:`, error)
-      throw new Error(`Failed to fetch thing ${thingId}: ${error.message || 'Unknown error'}`)
+      console.error(`[Thingiverse API] Unexpected error fetching thing ${thingId}:`, {
+        error,
+        errorMessage: error?.message,
+        errorName: error?.name,
+        errorStack: error?.stack,
+        errorString: String(error),
+      })
+      throw new Error(`Failed to fetch thing ${thingId}: ${error?.message || String(error) || 'Unknown error'}`)
     }
   }
 

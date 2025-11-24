@@ -8,6 +8,7 @@ import ReviewForm from '@/components/reviews/ReviewForm'
 import ReviewList from '@/components/reviews/ReviewList'
 import CommentForm from '@/components/comments/CommentForm'
 import CommentList from '@/components/comments/CommentList'
+import PrintCostCalculator from '@/components/models/PrintCostCalculator'
 
 interface ModelDetailProps {
   model: Model & {
@@ -194,6 +195,54 @@ export default function ModelDetail({ model }: ModelDetailProps) {
                   </a>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Print Cost Calculator */}
+          {model.files && model.files.length > 0 && (
+            <PrintCostCalculator
+              files={model.files}
+              material="PLA"
+              onTimeout={() => {
+                // Show manual button if timeout
+                const manualButton = document.getElementById('manual-cost-button')
+                if (manualButton) {
+                  manualButton.style.display = 'block'
+                }
+              }}
+            />
+          )}
+
+          {/* Manual Cost Calculation Button (shown on timeout or error) */}
+          {model.files && model.files.length > 0 && (
+            <div id="manual-cost-button" className="p-6 border-b" style={{ display: 'none' }}>
+              <h2 className="text-xl font-semibold mb-4">Kosten berekenen</h2>
+              <button
+                onClick={async () => {
+                  // Try to calculate cost manually
+                  const stlFile = model.files?.find(
+                    (f) => f.file_type?.toUpperCase() === 'STL' || f.file_url?.toLowerCase().endsWith('.stl')
+                  )
+                  if (stlFile) {
+                    try {
+                      const response = await fetch(stlFile.file_url)
+                      const blob = await response.blob()
+                      const { parseSTLAndCalculateVolume, calculatePrintCost } = await import('@/lib/utils/cost-calculator')
+                      const volume = await parseSTLAndCalculateVolume(blob)
+                      const cost = calculatePrintCost({ volume, material: 'PLA' })
+                      alert(`Geschatte kosten: €${cost.total.toFixed(2)}\nGewicht: ${cost.estimatedWeight.toFixed(1)}g\nPrinttijd: ${cost.estimatedPrintTime.toFixed(1)} uur`)
+                    } catch (error) {
+                      alert('Kon kosten niet berekenen. Neem contact op voor een offerte.')
+                    }
+                  }
+                }}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-yellow-500 to-orange-500 text-white rounded-xl hover:shadow-lg font-semibold transition-all"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+                Handmatig kosten berekenen
+              </button>
             </div>
           )}
 

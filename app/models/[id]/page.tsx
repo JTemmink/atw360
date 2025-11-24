@@ -68,20 +68,34 @@ export default async function ModelDetailPage({
         })),
       }
 
-      // Map files
-      modelFiles = files.map((file: any) => ({
-        id: `thingiverse_file_${file.id}`,
-        model_id: model.id,
-        file_url: file.public_url || file.download_url || file.url,
-        file_type: file.name?.split('.').pop()?.toUpperCase() || 'STL',
-        file_size: file.size || 0,
-      }))
+      // Map files - use direct_url if available, otherwise construct download URL
+      modelFiles = files.map((file: any) => {
+        // Thingiverse API may return direct_url, public_url, or we need to construct it
+        let fileUrl = file.direct_url || file.public_url || file.url
+        
+        // If no direct URL, try to construct from file ID
+        if (!fileUrl && file.id) {
+          // Thingiverse download format: https://www.thingiverse.com/download:FILE_ID
+          fileUrl = `https://www.thingiverse.com/download:${file.id}`
+        }
+        
+        return {
+          id: `thingiverse_file_${file.id}`,
+          model_id: model.id,
+          file_url: fileUrl,
+          file_type: file.name?.split('.').pop()?.toUpperCase() || 'STL',
+          file_size: file.size || 0,
+        }
+      })
     } catch (error: any) {
       console.error('[Model Detail] Error fetching Thingiverse model:', {
         id,
         thingId: id.replace('thingiverse_', ''),
-        error: error.message,
-        stack: error.stack,
+        error: error?.message || 'Unknown error',
+        errorName: error?.name,
+        errorStack: error?.stack,
+        errorString: String(error),
+        fullError: error,
       })
       notFound()
     }

@@ -191,3 +191,5 @@ INSERT INTO categories (name, slug) VALUES
   ('Sieraden', 'sieraden')
 ON CONFLICT (name) DO NOTHING;
 
+
+

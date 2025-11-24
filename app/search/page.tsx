@@ -67,10 +67,20 @@ function SearchPageContent() {
   }, [])
 
   useEffect(() => {
+    // Sync filters with URL params
+    const urlQuery = searchParams.get('q') || undefined
+    if (urlQuery !== filters.query) {
+      setFilters(prev => ({ ...prev, query: urlQuery, page: 1 }))
+      return // Wait for state update
+    }
+    
     // Don't search if categories haven't loaded yet and we need them
     if (filters.category_id && categories.length === 0) {
       return
     }
+    
+    // Abort controller to cancel previous requests
+    const abortController = new AbortController()
     
     setLoading(true)
     const page = filters.page || 1
@@ -90,12 +100,34 @@ function SearchPageContent() {
     params.set('page', page.toString())
     params.set('limit', resultsPerSource.toString())
     
-    const searchPromises = [
-      fetch(`/api/search?${params.toString()}&limit=${resultsPerSource}`).then((res) => res.json()),
-    ]
+    // Start with local search first (usually faster)
+    const localSearchPromise = fetch(`/api/search?${params.toString()}&limit=${resultsPerSource}`, {
+      signal: abortController.signal
+    }).then((res) => res.json())
 
-    // Add external search if enabled
-    // Show results if: query exists, filters are set, or no query/filters (show popular models)
+    // Process local results immediately when ready
+    localSearchPromise
+      .then((localResult) => {
+        if (abortController.signal.aborted) return
+        
+        if (localResult.models && localResult.models.length > 0) {
+          // Show local results immediately
+          const processedLocal = processAndDisplayModels(localResult.models, localResult.total || 0, true)
+          if (processedLocal && !abortController.signal.aborted) {
+            setModels(processedLocal.paginatedModels)
+            setTotalResults(processedLocal.total)
+            setCurrentPage(page)
+            setLoading(false) // Stop loading once we have some results
+          }
+        }
+      })
+      .catch((error) => {
+        if (error.name !== 'AbortError') {
+          console.error('Local search error:', error)
+        }
+      })
+
+    // Add external search if enabled (runs in parallel)
     const hasFilters = filters.category_id || filters.tag_ids?.length || filters.is_free !== undefined
     const shouldSearchExternal = externalSearchEnabled && (filters.query || hasFilters || (!filters.query && !hasFilters))
     
@@ -106,21 +138,11 @@ function SearchPageContent() {
       // If category is selected, add English category terms to the query
       if (filters.category_id && !filters.query) {
         const selectedCategory = categories.find(cat => cat.id === filters.category_id)
-        console.log('[Search] Category filter:', {
-          category_id: filters.category_id,
-          selectedCategory,
-          categoriesLength: categories.length,
-          categoryMap: categoryToEnglishMap,
-        })
         if (selectedCategory) {
           const englishTerms = categoryToEnglishMap[selectedCategory.name] || selectedCategory.name.toLowerCase()
           searchQuery = englishTerms
-          console.log('[Search] Using category search terms:', englishTerms)
-        } else {
-          console.warn('[Search] Category not found:', filters.category_id, 'Available categories:', categories.map(c => c.id))
         }
       } else if (filters.category_id && filters.query) {
-        // Combine query with category terms
         const selectedCategory = categories.find(cat => cat.id === filters.category_id)
         if (selectedCategory) {
           const englishTerms = categoryToEnglishMap[selectedCategory.name] || selectedCategory.name.toLowerCase()
@@ -133,195 +155,194 @@ function SearchPageContent() {
       // Add PLA to the query if PLA filter is enabled
       if (filters.pla_compatible !== false) {
         if (searchQuery) {
-          // Add PLA to the query if not already present
           const queryLower = searchQuery.toLowerCase()
           if (!queryLower.includes('pla')) {
             searchQuery = `${searchQuery} PLA`
           }
           externalParams.set('q', searchQuery)
-          console.log('[Search] External search query (with PLA filter):', searchQuery)
         } else {
-          // Use PLA as default search term
           externalParams.set('q', 'PLA')
         }
       } else {
-        // PLA filter disabled, use original query
         if (searchQuery) {
           externalParams.set('q', searchQuery)
         } else {
           externalParams.set('q', '*')
         }
       }
-      // Fetch multiple pages from external API for better sorting
-      const externalPages = Math.ceil(resultsPerSource / 20) // Thingiverse returns 20 per page
+      
+      // Reduce external pages to 1-2 for faster loading (was 3)
+      const externalPages = Math.min(Math.ceil(resultsPerSource / 20), 2)
       const externalPromises = []
-      for (let p = 1; p <= Math.min(externalPages, 3); p++) { // Max 3 pages to avoid too many requests
+      for (let p = 1; p <= externalPages; p++) {
         const extParams = new URLSearchParams(externalParams)
         extParams.set('page', p.toString())
         extParams.set('pageSize', '20')
-        // Default to 'popular' sort if no query (for "verken modelen")
         extParams.set('sort_by', filters.sort_by || (filters.query ? 'relevant' : 'popular'))
-        // Don't pass category_id to Thingiverse - we've added it to the query instead
         if (filters.tag_ids?.length) extParams.set('tags', filters.tag_ids.join(','))
         externalPromises.push(
-          fetch(`/api/models/external?${extParams.toString()}`).then((res) => res.json())
+          fetch(`/api/models/external?${extParams.toString()}`, {
+            signal: abortController.signal
+          }).then((res) => res.json())
         )
       }
-      searchPromises.push(
-        Promise.all(externalPromises).then((results) => {
-          // Combine all external results
-          const allExternalModels: Model[] = []
-          let maxExternalTotal = 0
+      
+      // Process external results when ready and merge with local
+      Promise.all([localSearchPromise, ...externalPromises])
+        .then((results) => {
+          if (abortController.signal.aborted) return
+          
+          const allModels: Model[] = []
+          let maxTotal = 0
+          
           results.forEach((result) => {
             if (result.models) {
-              allExternalModels.push(...result.models)
+              allModels.push(...result.models)
             }
-            if (result.total && result.total > maxExternalTotal) {
-              maxExternalTotal = result.total
+            if (result.total && result.total > maxTotal) {
+              maxTotal = result.total
             }
           })
-          return {
-            models: allExternalModels,
-            total: maxExternalTotal,
+          
+          // Process and display combined results
+          const processed = processAndDisplayModels(allModels, maxTotal, false)
+          if (processed && !abortController.signal.aborted) {
+            setModels(processed.paginatedModels)
+            setTotalResults(processed.total)
+            setCurrentPage(page)
+            setLoading(false)
           }
         })
-      )
+        .catch((error) => {
+          if (error.name !== 'AbortError') {
+            console.error('Search error:', error)
+            if (!abortController.signal.aborted) {
+              setLoading(false)
+            }
+          }
+        })
+    } else {
+      // No external search, just process local results
+      localSearchPromise
+        .then((result) => {
+          if (abortController.signal.aborted) return
+          const processed = processAndDisplayModels(result.models || [], result.total || 0, false)
+          if (processed && !abortController.signal.aborted) {
+            setModels(processed.paginatedModels)
+            setTotalResults(processed.total)
+            setCurrentPage(page)
+            setLoading(false)
+          }
+        })
+        .catch((error) => {
+          if (error.name !== 'AbortError') {
+            console.error('Search error:', error)
+            if (!abortController.signal.aborted) {
+              setLoading(false)
+            }
+          }
+        })
     }
 
-    Promise.all(searchPromises)
-      .then((results) => {
-        const allModels: Model[] = []
-        let maxTotal = 0
-        
-        results.forEach((result) => {
-          if (result.models) {
-            allModels.push(...result.models)
+    // Helper function to process models
+    function processAndDisplayModels(allModels: Model[], maxTotal: number, isPartial: boolean) {
+      if (abortController.signal.aborted) return null
+      
+      // Remove duplicates based on ID
+      const uniqueModels = allModels.filter(
+        (model, index, self) =>
+          index === self.findIndex((m) => m.id === model.id)
+      )
+      
+      // Apply is_free filter client-side
+      let filteredModels = uniqueModels
+      if (filters.is_free !== undefined) {
+        filteredModels = uniqueModels.filter((model) => {
+          if (model.id.startsWith('thingiverse_')) {
+            return filters.is_free === true
           }
-          // Use the highest total estimate
-          if (result.total && result.total > maxTotal) {
-            maxTotal = result.total
-          }
+          return model.is_free === filters.is_free
         })
-        
-        // Remove duplicates based on ID
-        const uniqueModels = allModels.filter(
-          (model, index, self) =>
-            index === self.findIndex((m) => m.id === model.id)
-        )
-        
-        // Apply is_free filter client-side (for combined results)
-        let filteredModels = uniqueModels
-        if (filters.is_free !== undefined) {
-          filteredModels = uniqueModels.filter((model) => {
-            // External models (Thingiverse) are always free
-            if (model.id.startsWith('thingiverse_')) {
-              return filters.is_free === true
-            }
-            return model.is_free === filters.is_free
-          })
-        }
-        
-        // Filter for PLA-compatible models suitable for Bambu P1S/P2S (only if filter is enabled)
-        if (filters.pla_compatible !== false) {
-          filteredModels = filteredModels.filter((model) => {
-            const nameLower = (model.name || '').toLowerCase()
-            const descLower = (model.description || '').toLowerCase()
-            const tagsLower = (model.tags || []).map(t => (t.name || '').toLowerCase()).join(' ')
-            const allText = `${nameLower} ${descLower} ${tagsLower}`.toLowerCase()
-            
-            // Check for PLA compatibility
-            const hasPLA = allText.includes('pla') || 
-                          allText.includes('polylactic acid') ||
-                          tagsLower.includes('pla')
-            
-            // Check for Bambu P1S/P2S compatibility or general FDM compatibility
-            // Most PLA models work on Bambu printers, so we check for:
-            // - Explicit Bambu mentions
-            // - P1S/P2S mentions
-            // - General FDM/3D printer compatibility (most models are)
-            // - No explicit exclusions (like "resin only", "SLA only", etc.)
-            const hasBambuCompatibility = 
-              allText.includes('bambu') ||
-              allText.includes('p1s') ||
-              allText.includes('p2s') ||
-              allText.includes('x1') ||
-              allText.includes('fdm') ||
-              allText.includes('fused deposition') ||
-              (!allText.includes('resin only') &&
-               !allText.includes('sla only') &&
-               !allText.includes('dlp only') &&
-               !allText.includes('sls only'))
-            
-            // If model explicitly mentions incompatible materials, exclude it
-            const hasIncompatibleMaterial = 
-              (allText.includes('abs') && !allText.includes('pla')) ||
-              (allText.includes('petg') && !allText.includes('pla')) ||
-              (allText.includes('tpu') && !allText.includes('pla')) ||
-              (allText.includes('resin') && !allText.includes('pla')) ||
-              (allText.includes('sla') && !allText.includes('pla')) ||
-              (allText.includes('dlp') && !allText.includes('pla')) ||
-              (allText.includes('sls') && !allText.includes('pla'))
-            
-            // Include if: has PLA AND (has Bambu compatibility OR no incompatible materials)
-            return hasPLA && (hasBambuCompatibility || !hasIncompatibleMaterial)
-          })
-        }
-        
-        // Debug: check download_count
-        if (filteredModels.length > 0) {
-          console.log('[Search] Sample model download_count:', {
-            id: filteredModels[0].id,
-            name: filteredModels[0].name,
-            download_count: filteredModels[0].download_count,
-            is_free: filteredModels[0].is_free,
-            hasDownloadCount: 'download_count' in filteredModels[0],
-          })
-        }
-        
-        // Apply sorting to combined results
-        // If no query and no filters, default to popularity (most popular of the week)
-        const hasAnyFilters = filters.category_id || filters.tag_ids?.length || filters.is_free !== undefined
-        const defaultSort = (!filters.query && !hasAnyFilters) ? 'popularity' : (filters.sort_by || 'relevance')
-        const sortedModels = applySorting(filteredModels, defaultSort)
-        
-        // If no query and no filters, filter to models from the last week for "most popular of the week"
-        let finalModels = sortedModels
-        if (!filters.query && !hasAnyFilters) {
-          const oneWeekAgo = new Date()
-          oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
-          finalModels = sortedModels.filter((model) => {
-            const modelDate = new Date(model.created_at)
-            return modelDate >= oneWeekAgo
-          })
-          // If we don't have enough from last week, show all popular models
-          if (finalModels.length < pageSize) {
-            finalModels = sortedModels
-          }
-        } else {
+      }
+      
+      // Filter for PLA-compatible models
+      if (filters.pla_compatible !== false) {
+        filteredModels = filteredModels.filter((model) => {
+          const nameLower = (model.name || '').toLowerCase()
+          const descLower = (model.description || '').toLowerCase()
+          const tagsLower = (model.tags || []).map(t => (t.name || '').toLowerCase()).join(' ')
+          const allText = `${nameLower} ${descLower} ${tagsLower}`.toLowerCase()
+          
+          const hasPLA = allText.includes('pla') || 
+                        allText.includes('polylactic acid') ||
+                        tagsLower.includes('pla')
+          
+          const hasBambuCompatibility = 
+            allText.includes('bambu') ||
+            allText.includes('p1s') ||
+            allText.includes('p2s') ||
+            allText.includes('x1') ||
+            allText.includes('fdm') ||
+            allText.includes('fused deposition') ||
+            (!allText.includes('resin only') &&
+             !allText.includes('sla only') &&
+             !allText.includes('dlp only') &&
+             !allText.includes('sls only'))
+          
+          const hasIncompatibleMaterial = 
+            (allText.includes('abs') && !allText.includes('pla')) ||
+            (allText.includes('petg') && !allText.includes('pla')) ||
+            (allText.includes('tpu') && !allText.includes('pla')) ||
+            (allText.includes('resin') && !allText.includes('pla')) ||
+            (allText.includes('sla') && !allText.includes('pla')) ||
+            (allText.includes('dlp') && !allText.includes('pla')) ||
+            (allText.includes('sls') && !allText.includes('pla'))
+          
+          return hasPLA && (hasBambuCompatibility || !hasIncompatibleMaterial)
+        })
+      }
+      
+      // Apply sorting
+      const hasAnyFilters = filters.category_id || filters.tag_ids?.length || filters.is_free !== undefined
+      const defaultSort = (!filters.query && !hasAnyFilters) ? 'popularity' : (filters.sort_by || 'relevance')
+      const sortedModels = applySorting(filteredModels, defaultSort)
+      
+      // Filter to last week if no query/filters
+      let finalModels = sortedModels
+      if (!filters.query && !hasAnyFilters) {
+        const oneWeekAgo = new Date()
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
+        finalModels = sortedModels.filter((model) => {
+          const modelDate = new Date(model.created_at)
+          return modelDate >= oneWeekAgo
+        })
+        if (finalModels.length < pageSize) {
           finalModels = sortedModels
         }
-        
-        // Apply client-side pagination after sorting
-        const startIndex = (page - 1) * pageSize
-        const endIndex = startIndex + pageSize
-        const paginatedModels = finalModels.slice(startIndex, endIndex)
-        
-        // Estimate total: if we got full results, assume there are more
-        const hasMoreResults = finalModels.length >= resultsPerSource
-        const estimatedTotal = hasMoreResults 
-          ? Math.max(maxTotal, page * pageSize + pageSize * 2) // Estimate more pages
-          : finalModels.length
-        
-        setModels(paginatedModels)
-        setTotalResults(Math.max(maxTotal, estimatedTotal))
-        setCurrentPage(page)
-        setLoading(false)
-      })
-      .catch((error) => {
-        console.error('Search error:', error)
-        setLoading(false)
-      })
-  }, [filters, externalSearchEnabled, categories])
+      }
+      
+      // Apply pagination
+      const startIndex = (page - 1) * pageSize
+      const endIndex = startIndex + pageSize
+      const paginatedModels = finalModels.slice(startIndex, endIndex)
+      
+      // Estimate total
+      const hasMoreResults = finalModels.length >= resultsPerSource
+      const estimatedTotal = hasMoreResults 
+        ? Math.max(maxTotal, page * pageSize + pageSize * 2)
+        : finalModels.length
+      
+      return {
+        paginatedModels,
+        total: Math.max(maxTotal, estimatedTotal),
+      }
+    }
+    
+    // Cleanup: abort ongoing requests when component unmounts or dependencies change
+    return () => {
+      abortController.abort()
+    }
+  }, [filters, externalSearchEnabled, categories, searchParams])
 
   const applySorting = (models: Model[], sortBy: string): Model[] => {
     const sorted = [...models]
