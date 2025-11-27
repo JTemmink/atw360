@@ -1,7 +1,6 @@
 'use client'
 
 import { Model, Review, Comment } from '@/lib/types/models'
-import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import ReviewForm from '@/components/reviews/ReviewForm'
@@ -35,7 +34,7 @@ export default function ModelDetail({ model }: ModelDetailProps) {
   const isExternal = (model as any).is_external
 
   const checkFavorite = async (userId: string) => {
-    if (isExternal) return // External models can't be favorited in our DB
+    if (isExternal) return
     
     const { data } = await supabase
       .from('favorites')
@@ -49,7 +48,6 @@ export default function ModelDetail({ model }: ModelDetailProps) {
 
   const toggleFavorite = async () => {
     if (isExternal) {
-      // For external models, we could store in localStorage or show a message
       alert('Externe modellen kunnen niet worden opgeslagen als favoriet. Bezoek de Thingiverse pagina om het daar op te slaan.')
       return
     }
@@ -76,43 +74,31 @@ export default function ModelDetail({ model }: ModelDetailProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="container mx-auto px-4 max-w-6xl">
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          {/* Header */}
-          <div className="p-6 border-b">
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <h1 className="text-3xl font-bold mb-2">{model.name}</h1>
-                {model.description && (
-                  <p className="text-gray-600 mb-4">{model.description}</p>
-                )}
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {model.category && (
-                    <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
-                      {model.category.name}
-                    </span>
-                  )}
-                  {model.tags?.map((tag) => (
-                    <span
-                      key={tag.id}
-                      className="px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-sm"
-                    >
-                      {tag.name}
-                    </span>
-                  ))}
-                </div>
-              </div>
+    <div className="min-h-screen bg-background pt-20 md:pt-24 pb-8">
+      <div className="container mx-auto px-4 max-w-5xl">
+        <div className="bg-gray-900/40 backdrop-blur-xl rounded-2xl border border-white/10 overflow-hidden">
+          
+          {/* Image - First */}
+          {model.thumbnail_url && (
+            <div className="w-full aspect-video bg-gray-800 relative">
+              <img
+                src={model.thumbnail_url}
+                alt={model.name}
+                className="w-full h-full object-contain"
+              />
+              {/* Favorite button overlay */}
               {!isExternal && (
                 <button
                   onClick={toggleFavorite}
-                  className={`px-4 py-2 rounded-lg font-medium ${
+                  className={`absolute top-4 right-4 p-3 rounded-full backdrop-blur-md transition-all ${
                     isFavorite
-                      ? 'bg-red-100 text-red-700 hover:bg-red-200'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      ? 'bg-red-500/80 text-white'
+                      : 'bg-gray-900/60 text-gray-300 hover:bg-gray-900/80'
                   }`}
                 >
-                  {isFavorite ? '❤️ Verwijder uit favorieten' : '🤍 Voeg toe aan favorieten'}
+                  <svg className="w-6 h-6" fill={isFavorite ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                  </svg>
                 </button>
               )}
               {isExternal && (model as any).external_url && (
@@ -120,91 +106,33 @@ export default function ModelDetail({ model }: ModelDetailProps) {
                   href={(model as any).external_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                  className="absolute top-4 right-4 px-4 py-2 bg-blue-600/80 text-white rounded-lg backdrop-blur-md hover:bg-blue-600 transition-all text-sm font-medium"
                 >
                   Open op Thingiverse →
                 </a>
               )}
             </div>
-          </div>
-
-          {/* Image */}
-          {model.thumbnail_url && (
-            <div className="w-full h-96 bg-gray-200">
-              <img
-                src={model.thumbnail_url}
-                alt={model.name}
-                className="w-full h-full object-contain"
-              />
-            </div>
           )}
 
-          {/* Stats */}
-          <div className="p-6 border-b grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div>
-              <div className="text-sm text-gray-600">Downloads</div>
-              <div className="text-2xl font-bold">{model.download_count}</div>
-            </div>
-            {model.average_quality && (
-              <div>
-                <div className="text-sm text-gray-600">Kwaliteit</div>
-                <div className="text-2xl font-bold">
-                  ⭐ {model.average_quality.toFixed(1)}
-                </div>
-              </div>
+          {/* Title & Description - Under the image */}
+          <div className="p-6 border-b border-white/5">
+            <h1 className="text-2xl md:text-3xl font-bold text-white mb-3">{model.name}</h1>
+            {model.description && (
+              <p className="text-gray-400 leading-relaxed">{model.description}</p>
             )}
-            {model.average_printability && (
-              <div>
-                <div className="text-sm text-gray-600">Printbaarheid</div>
-                <div className="text-2xl font-bold">
-                  ⭐ {model.average_printability.toFixed(1)}
-                </div>
-              </div>
-            )}
-            {model.average_design && (
-              <div>
-                <div className="text-sm text-gray-600">Design</div>
-                <div className="text-2xl font-bold">
-                  ⭐ {model.average_design.toFixed(1)}
-                </div>
-              </div>
+            {model.category && (
+              <span className="inline-block mt-4 px-3 py-1 bg-cyan-500/20 text-cyan-400 rounded-full text-sm border border-cyan-500/30">
+                {model.category.name}
+              </span>
             )}
           </div>
 
-          {/* Files */}
-          {model.files && model.files.length > 0 && (
-            <div className="p-6 border-b">
-              <h2 className="text-xl font-semibold mb-4">Download Bestanden</h2>
-              <div className="space-y-2">
-                {model.files.map((file: any) => (
-                  <a
-                    key={file.id}
-                    href={file.file_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block p-3 bg-gray-50 rounded-lg hover:bg-gray-100"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">{file.file_type?.toUpperCase() || 'FILE'}</span>
-                      {file.file_size > 0 && (
-                        <span className="text-sm text-gray-600">
-                          {(file.file_size / 1024 / 1024).toFixed(2)} MB
-                        </span>
-                      )}
-                    </div>
-                  </a>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Print Cost Calculator */}
+          {/* Print Cost Calculator - Under description */}
           {model.files && model.files.length > 0 && (
             <PrintCostCalculator
               files={model.files}
               material="PLA"
               onTimeout={() => {
-                // Show manual button if timeout
                 const manualButton = document.getElementById('manual-cost-button')
                 if (manualButton) {
                   manualButton.style.display = 'block'
@@ -213,13 +141,66 @@ export default function ModelDetail({ model }: ModelDetailProps) {
             />
           )}
 
+          {/* Stats */}
+          <div className="p-6 border-b border-white/5 grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="text-center p-3 bg-gray-800/30 rounded-xl">
+              <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">Downloads</div>
+              <div className="text-xl font-bold text-white">{model.download_count || 0}</div>
+            </div>
+            {model.average_quality && (
+              <div className="text-center p-3 bg-gray-800/30 rounded-xl">
+                <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">Kwaliteit</div>
+                <div className="text-xl font-bold text-yellow-400">⭐ {model.average_quality.toFixed(1)}</div>
+              </div>
+            )}
+            {model.average_printability && (
+              <div className="text-center p-3 bg-gray-800/30 rounded-xl">
+                <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">Printbaarheid</div>
+                <div className="text-xl font-bold text-yellow-400">⭐ {model.average_printability.toFixed(1)}</div>
+              </div>
+            )}
+            {model.average_design && (
+              <div className="text-center p-3 bg-gray-800/30 rounded-xl">
+                <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">Design</div>
+                <div className="text-xl font-bold text-yellow-400">⭐ {model.average_design.toFixed(1)}</div>
+              </div>
+            )}
+          </div>
+
+          {/* Non-STL Files (other formats) */}
+          {model.files && model.files.filter((f: any) => 
+            f.file_type?.toUpperCase() !== 'STL' && !f.file_url?.toLowerCase().endsWith('.stl')
+          ).length > 0 && (
+            <div className="p-6 border-b border-white/5">
+              <h2 className="text-lg font-semibold text-white mb-4">Overige Bestanden</h2>
+              <div className="space-y-2">
+                {model.files.filter((f: any) => 
+                  f.file_type?.toUpperCase() !== 'STL' && !f.file_url?.toLowerCase().endsWith('.stl')
+                ).map((file: any) => (
+                  <a
+                    key={file.id}
+                    href={file.file_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between p-3 bg-gray-800/30 rounded-xl hover:bg-gray-800/50 transition-colors"
+                  >
+                    <span className="font-medium text-gray-300">{file.file_type?.toUpperCase() || 'FILE'}</span>
+                    {file.file_size > 0 && (
+                      <span className="text-sm text-gray-500">
+                        {(file.file_size / 1024 / 1024).toFixed(2)} MB
+                      </span>
+                    )}
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Manual Cost Calculation Button (shown on timeout or error) */}
           {model.files && model.files.length > 0 && (
-            <div id="manual-cost-button" className="p-6 border-b" style={{ display: 'none' }}>
-              <h2 className="text-xl font-semibold mb-4">Kosten berekenen</h2>
+            <div id="manual-cost-button" className="p-6 border-b border-white/5" style={{ display: 'none' }}>
               <button
                 onClick={async () => {
-                  // Try to calculate cost manually
                   const stlFile = model.files?.find(
                     (f) => f.file_type?.toUpperCase() === 'STL' || f.file_url?.toLowerCase().endsWith('.stl')
                   )
@@ -247,11 +228,11 @@ export default function ModelDetail({ model }: ModelDetailProps) {
           )}
 
           {/* Find Printer Button */}
-          <div className="p-6 border-b">
-            <h2 className="text-xl font-semibold mb-4">Laat dit model printen</h2>
+          <div className="p-6 border-b border-white/5">
+            <h2 className="text-lg font-semibold text-white mb-4">Laat dit model printen</h2>
             <a
               href={`mailto:otte@example.com?subject=3D Print Aanvraag&body=Ik wil graag dit model laten printen: ${encodeURIComponent(model.name)}`}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:shadow-lg font-semibold transition-all"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-xl hover:shadow-lg hover:shadow-cyan-500/20 font-semibold transition-all"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
@@ -260,25 +241,10 @@ export default function ModelDetail({ model }: ModelDetailProps) {
             </a>
           </div>
 
-          {/* External Model Link */}
-          {(model as any).is_external && (model as any).external_url && (
-            <div className="p-6 border-b">
-              <h2 className="text-xl font-semibold mb-4">Bekijk op Thingiverse</h2>
-              <a
-                href={(model as any).external_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
-              >
-                Open op Thingiverse →
-              </a>
-            </div>
-          )}
-
           {/* Reviews - Only for local models */}
           {!(model as any).is_external && (
-            <div className="p-6 border-b">
-              <h2 className="text-xl font-semibold mb-4">Reviews</h2>
+            <div className="p-6 border-b border-white/5">
+              <h2 className="text-lg font-semibold text-white mb-4">Reviews</h2>
               {user && <ReviewForm modelId={model.id} />}
               <ReviewList reviews={model.reviews || []} modelId={model.id} />
             </div>
@@ -287,7 +253,7 @@ export default function ModelDetail({ model }: ModelDetailProps) {
           {/* Comments - Only for local models */}
           {!(model as any).is_external && (
             <div className="p-6">
-              <h2 className="text-xl font-semibold mb-4">Comments</h2>
+              <h2 className="text-lg font-semibold text-white mb-4">Comments</h2>
               {user && <CommentForm modelId={model.id} />}
               <CommentList comments={model.comments || []} modelId={model.id} />
             </div>
@@ -296,14 +262,14 @@ export default function ModelDetail({ model }: ModelDetailProps) {
           {/* External model notice */}
           {(model as any).is_external && (
             <div className="p-6">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <p className="text-sm text-blue-800">
+              <div className="bg-blue-900/20 border border-blue-500/30 rounded-xl p-4">
+                <p className="text-sm text-blue-300">
                   Dit is een extern model van Thingiverse. Voor reviews en comments, bezoek de{' '}
                   <a
                     href={(model as any).external_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="font-medium underline hover:text-blue-900"
+                    className="font-medium underline hover:text-blue-200"
                   >
                     Thingiverse pagina
                   </a>
@@ -317,4 +283,3 @@ export default function ModelDetail({ model }: ModelDetailProps) {
     </div>
   )
 }
-

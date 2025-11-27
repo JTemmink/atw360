@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "3D Model Zoekplatform",
+  title: "OTTE3D Wereld",
   description: "Vind, beoordeel en deel 3D-printbare modellen",
 };
 

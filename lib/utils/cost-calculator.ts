@@ -30,7 +30,7 @@ const MATERIAL_DENSITIES: Record<string, number> = {
 
 // Material prices per kg (€)
 const MATERIAL_PRICES: Record<string, number> = {
-  PLA: 25, // €25 per kg
+  PLA: 35, // €25 per kg
   PETG: 28,
   ABS: 30,
   TPU: 45,
@@ -40,12 +40,12 @@ const MATERIAL_PRICES: Record<string, number> = {
 const PRINTER_SETTINGS = {
   powerConsumption: 150, // watts
   electricityPrice: 0.20, // € per kWh
-  laborRate: 20, // € per hour
+  laborRate: 6, // € per hour
   machineDepreciationRate: 0.05, // 5% of material cost
   profitMargin: 0.30, // 30% profit margin
   averagePrintSpeed: 50, // mm/s
   layerHeight: 0.2, // mm (default)
-  infill: 20, // percentage (default)
+  infill: 15, // percentage (default)
 }
 
 // Estimate print time based on volume and settings
